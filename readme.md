@@ -1,5 +1,9 @@
 # tcp 服务实现
 
+~~~~shell
+go get github.com/ctfang/tcp-server
+~~~~
+
 #### 数据帧（Data Framing）
 ````go
 type Frame struct {
