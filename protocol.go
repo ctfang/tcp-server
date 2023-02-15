@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"net"
+	"time"
 )
 
 type Protocol struct {
@@ -20,6 +21,9 @@ func (w *Protocol) Init() {
 func (w *Protocol) Read(conn net.Conn) (Frame, error) {
 	got := Frame{}
 	payloadLenByte, err := w.readConnOrCache(conn, 1)
+	if err != nil {
+		return got, err
+	}
 	if len(payloadLenByte) == 0 {
 		return got, errors.New("EOF")
 	}
@@ -28,10 +32,14 @@ func (w *Protocol) Read(conn net.Conn) (Frame, error) {
 	// mask := payloadLenByte[0] >> 7
 
 	switch got.PayloadLen {
-	case 126: // 两个字节表示的是一个16进制无符号数，这个数用来表示传输数据的长度
+	case 126:
+		// 两个字节表示的是一个16进制无符号数，这个数用来表示传输数据的长度
+		// 有效负载的长度小于等于65536字节时，需要2个字节表示长度
 		temLen, _ := w.readConnOrCache(conn, 2)
 		got.PayloadLen = int(binary.BigEndian.Uint16(temLen))
-	case 127: // 8个字节表示的一个64位无符合数，这个数用来表示传输数据的长度
+	case 127:
+		// 8个字节表示的一个64位无符合数，这个数用来表示传输数据的长度
+		// 有效负载的长度大于65536字节时，需要8个字节表示长度
 		temLen, _ := w.readConnOrCache(conn, 8)
 		got.PayloadLen = int(binary.BigEndian.Uint64(temLen))
 	}
@@ -80,10 +88,14 @@ func (w *Protocol) readConnOrCache(conn net.Conn, count int) ([]byte, error) {
 			return msg, nil
 		} else {
 			// 缓冲数据不足，剩余需要的位数，多读取一点，可以优化速度
+			err := conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+			if err != nil {
+				return nil, err
+			}
 			data := make([]byte, count+512)
 			cacheCount, err := conn.Read(data)
 			if err != nil {
-				return nil, errors.New("读取数据失败")
+				return nil, err
 			}
 			w.cacheCount = w.cacheCount + cacheCount
 			w.cacheByte = append(w.cacheByte, data[:cacheCount]...)
@@ -91,10 +103,14 @@ func (w *Protocol) readConnOrCache(conn net.Conn, count int) ([]byte, error) {
 		}
 	} else {
 		// 缓冲是空的
+		err := conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+		if err != nil {
+			return nil, err
+		}
 		data := make([]byte, 1024)
 		cacheCount, err := conn.Read(data)
 		if err != nil {
-			return nil, errors.New("读取数据失败")
+			return nil, err
 		}
 		w.cacheCount = cacheCount
 		w.cacheByte = append(w.cacheByte, data[:cacheCount]...)

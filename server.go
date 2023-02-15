@@ -33,6 +33,7 @@ func (s *Server) Run() {
 		logrus.Fatalf("tpc server run err(%v)", err)
 		return
 	}
+	defer listener.Close()
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
@@ -58,6 +59,7 @@ func (s *Server) handleClient(conn *Connect) {
 	defer s.event.OnClose(conn)
 
 	p := Protocol{}
+	p.Init()
 	for {
 		message, err := p.Read(conn.Conn)
 		if err != nil {

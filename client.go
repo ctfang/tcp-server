@@ -39,6 +39,7 @@ func (c *client) Run() {
 	defer c.event.OnClose(conn)
 
 	p := Protocol{}
+	p.Init()
 	for {
 		message, err := p.Read(conn.Conn)
 		if err != nil {
