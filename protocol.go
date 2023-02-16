@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"net"
-	"time"
 )
 
 type Protocol struct {
@@ -45,6 +44,19 @@ func (w *Protocol) Read(conn net.Conn) (Frame, error) {
 	}
 
 	got.Payload, err = w.readConnOrCache(conn, got.PayloadLen)
+	if err != nil {
+		return got, err
+	}
+
+	checksumByte, err := w.readConnOrCache(conn, 1)
+	if err != nil {
+		return got, err
+	}
+
+	got.Checksum = checksumByte[0]
+	if got.Checksum != calculateChecksum(got.Payload) {
+		return got, errors.New("checksum failed")
+	}
 	return got, err
 }
 
@@ -73,7 +85,16 @@ func ToFrame(msg []byte) []byte {
 		sendByte = append(sendByte, payLenByte8...)
 	}
 	sendByte = append(sendByte, msg...)
+	sendByte = append(sendByte, calculateChecksum(msg))
 	return sendByte
+}
+
+func calculateChecksum(Payload []byte) byte {
+	var sum byte
+	for _, b := range Payload {
+		sum += b
+	}
+	return sum % 255
 }
 
 // 读取指定长度数据
@@ -88,10 +109,6 @@ func (w *Protocol) readConnOrCache(conn net.Conn, count int) ([]byte, error) {
 			return msg, nil
 		} else {
 			// 缓冲数据不足，剩余需要的位数，多读取一点，可以优化速度
-			err := conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-			if err != nil {
-				return nil, err
-			}
 			data := make([]byte, count+512)
 			cacheCount, err := conn.Read(data)
 			if err != nil {
@@ -103,10 +120,6 @@ func (w *Protocol) readConnOrCache(conn net.Conn, count int) ([]byte, error) {
 		}
 	} else {
 		// 缓冲是空的
-		err := conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-		if err != nil {
-			return nil, err
-		}
 		data := make([]byte, 1024)
 		cacheCount, err := conn.Read(data)
 		if err != nil {

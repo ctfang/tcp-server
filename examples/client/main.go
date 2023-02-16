@@ -28,5 +28,5 @@ func (*e) OnClose(connect *tcp.Connect) {
 }
 
 func (*e) OnError(err error) {
-	log.Println("OnError")
+	log.Println("OnError", err)
 }
