@@ -42,18 +42,16 @@ func (w *Protocol) Read(conn net.Conn) (Frame, error) {
 		temLen, _ := w.readConnOrCache(conn, 8)
 		got.PayloadLen = int(binary.BigEndian.Uint64(temLen))
 	}
-
-	got.Payload, err = w.readConnOrCache(conn, got.PayloadLen)
-	if err != nil {
-		return got, err
-	}
-
 	checksumByte, err := w.readConnOrCache(conn, 1)
 	if err != nil {
 		return got, err
 	}
 
 	got.Checksum = checksumByte[0]
+	got.Payload, err = w.readConnOrCache(conn, got.PayloadLen)
+	if err != nil {
+		return got, err
+	}
 	if got.Checksum != calculateChecksum(got.Payload) {
 		return got, errors.New("checksum failed")
 	}
@@ -84,8 +82,8 @@ func ToFrame(msg []byte) []byte {
 		binary.BigEndian.PutUint64(payLenByte8, uint64(length))
 		sendByte = append(sendByte, payLenByte8...)
 	}
-	sendByte = append(sendByte, msg...)
 	sendByte = append(sendByte, calculateChecksum(msg))
+	sendByte = append(sendByte, msg...)
 	return sendByte
 }
 
